@@ -1,0 +1,923 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FrSky Horus X12S — ETHOS 1.6 Saab Gripen HUD Simulator</title>
+  <style>
+    * { box-sizing: border-box; user-select: none; -webkit-user-select: none; }
+    body {
+      margin: 0;
+      padding: 16px;
+      background: #0d1117;
+      color: #e6edf3;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+    }
+    .header {
+      width: 100%;
+      max-width: 960px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #30363d;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .header h1 { margin: 0; font-size: 1.15rem; color: #00ff66; letter-spacing: 0.4px; }
+    .header p { margin: 2px 0 0; font-size: 0.8rem; color: #8b949e; }
+    .btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
+    button {
+      background: #21262d;
+      color: #c9d1d9;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 6px 12px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    button:hover { background: #30363d; border-color: #8b949e; color: #fff; }
+    button.active { background: #0f3d24; border-color: #00ff66; color: #00ff66; }
+
+    /* Horus X12S Radio Chassis */
+    .tx-chassis {
+      width: 100%;
+      max-width: 940px;
+      background: linear-gradient(145deg, #272c33 0%, #1a1e24 100%);
+      border: 2px solid #3d444d;
+      border-radius: 26px;
+      padding: 18px 22px 24px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 18px;
+    }
+    .tx-badge {
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 2px;
+      color: #8b949e;
+      text-transform: uppercase;
+    }
+
+    /* Top Screen Bezel (480x272 TFT) */
+    .screen-bezel {
+      background: #080a0c;
+      border: 4px solid #121518;
+      border-radius: 12px;
+      padding: 10px 14px 12px;
+      box-shadow: inset 0 0 16px rgba(0, 0, 0, 0.95), 0 4px 14px rgba(0, 0, 0, 0.5);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: fit-content;
+      max-width: 100%;
+    }
+    .ethos-topbar {
+      width: 480px;
+      max-width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #14191f;
+      color: #9ba7b4;
+      font-family: monospace;
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 4px 4px 0 0;
+      border-bottom: 1px solid #262e38;
+    }
+    .ethos-topbar span.model { color: #00ff66; font-weight: bold; }
+    canvas#hudCanvas {
+      display: block;
+      width: 480px;
+      height: 272px;
+      max-width: 100%;
+      background: #060a08;
+      border: 1px solid #1f2923;
+    }
+    .ethos-softkeys {
+      width: 480px;
+      max-width: 100%;
+      display: flex;
+      justify-content: space-between;
+      margin-top: 8px;
+      padding: 0 16px;
+    }
+    .softkey {
+      background: #1b2026;
+      border: 1px solid #323942;
+      color: #8b949e;
+      font-size: 0.68rem;
+      padding: 3px 10px;
+      border-radius: 4px;
+      font-weight: 700;
+    }
+
+    /* Lower Deck: Left & Right Mode 2 Gimbals + Center Telemetry Panel */
+    .lower-deck {
+      width: 100%;
+      display: grid;
+      grid-template-columns: 210px 1fr 210px;
+      gap: 16px;
+      align-items: center;
+    }
+    @media (max-width: 820px) {
+      .lower-deck { grid-template-columns: 1fr; justify-items: center; }
+    }
+
+    .gimbal-unit {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      background: #14171c;
+      border: 1px solid #2d333b;
+      border-radius: 16px;
+      padding: 12px;
+      width: 210px;
+    }
+    .gimbal-title {
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: #8b949e;
+      margin-bottom: 8px;
+      letter-spacing: 0.5px;
+    }
+    .gimbal-well {
+      position: relative;
+      width: 146px;
+      height: 146px;
+      border-radius: 50%;
+      background: radial-gradient(circle, #0d1014 45%, #1c2128 100%);
+      border: 3px solid #373e47;
+      box-shadow: inset 0 6px 14px rgba(0,0,0,0.85);
+      cursor: grab;
+      touch-action: none;
+    }
+    .gimbal-well:active { cursor: grabbing; }
+    .gimbal-crosshair-h {
+      position: absolute;
+      top: 50%;
+      left: 10px;
+      right: 10px;
+      height: 1px;
+      background: rgba(255,255,255,0.12);
+      transform: translateY(-50%);
+      pointer-events: none;
+    }
+    .gimbal-crosshair-v {
+      position: absolute;
+      left: 50%;
+      top: 10px;
+      bottom: 10px;
+      width: 1px;
+      background: rgba(255,255,255,0.12);
+      transform: translateX(-50%);
+      pointer-events: none;
+    }
+    .gimbal-knob {
+      position: absolute;
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 35% 35%, #6e7681, #2d333b 70%, #161b22 100%);
+      border: 2px solid #00ff66;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.8);
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+    }
+    .stick-readout {
+      margin-top: 8px;
+      font-family: monospace;
+      font-size: 0.74rem;
+      color: #00ff66;
+      text-align: center;
+    }
+    .trim-row {
+      display: flex;
+      gap: 6px;
+      margin-top: 6px;
+    }
+    .trim-btn {
+      padding: 2px 7px;
+      font-size: 0.68rem;
+      background: #21262d;
+      border: 1px solid #30363d;
+      color: #8b949e;
+      border-radius: 4px;
+    }
+
+    /* Center Telemetry & Flight Mode Console */
+    .center-console {
+      background: #14171c;
+      border: 1px solid #2d333b;
+      border-radius: 14px;
+      padding: 12px 14px;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .console-section-title {
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: #00ff66;
+      border-bottom: 1px solid #262c34;
+      padding-bottom: 4px;
+    }
+    .preset-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+    }
+    .preset-grid button {
+      font-size: 0.72rem;
+      padding: 5px 6px;
+    }
+    .slider-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px 14px;
+    }
+    .slider-item {
+      display: flex;
+      flex-direction: column;
+      font-size: 0.72rem;
+      color: #8b949e;
+    }
+    .slider-item label {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 2px;
+    }
+    .slider-item label span { color: #e6edf3; font-family: monospace; }
+    input[type="range"] {
+      width: 100%;
+      accent-color: #00ff66;
+      cursor: pointer;
+    }
+    .status-strip {
+      display: flex;
+      justify-content: space-between;
+      font-family: monospace;
+      font-size: 0.73rem;
+      background: #0d1014;
+      padding: 6px 10px;
+      border-radius: 6px;
+      border: 1px solid #21262d;
+      color: #8b949e;
+    }
+    .status-strip b { color: #00ff66; }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div>
+      <h1>FrSky Horus X12S — ETHOS 1.6 Saab Gripen INAV HUD (v1.0.0-rc1)</h1>
+      <p>Mode 2 Transmitter &amp; Real-Time Vector HUD Simulator • GPLv3 Open Source</p>
+    </div>
+    <div class="btn-group">
+      <button id="btnAutoDemo">▶ Auto Flight Demo</button>
+      <button id="btnReset">↺ Center &amp; Level</button>
+    </div>
+  </div>
+
+  <div class="tx-chassis">
+    <div class="tx-badge">FrSky Horus X12S • ETHOS 1.6.x Vector Graphics Engine (480×272)</div>
+
+    <!-- Top Center 480x272 TFT Screen -->
+    <div class="screen-bezel">
+      <div class="ethos-topbar">
+        <span class="model">MODEL: GRIPEN_INAV</span>
+        <span id="ethosTimer">FLT 00:00</span>
+        <span>TX 7.9V | D16v2 S.PORT</span>
+      </div>
+      <canvas id="hudCanvas" width="480" height="272"></canvas>
+      <div class="ethos-softkeys">
+        <span class="softkey">SYS</span>
+        <span class="softkey">MDL</span>
+        <span class="softkey">DISP</span>
+        <span class="softkey">TELEM</span>
+        <span class="softkey">RTN</span>
+      </div>
+    </div>
+
+    <!-- Lower Control Deck: Mode 2 Sticks + Telemetry & Flight Controls -->
+    <div class="lower-deck">
+      <!-- Left Gimbal: Throttle (Y, non-centering) + Yaw (X, spring-centered) -->
+      <div class="gimbal-unit">
+        <div class="gimbal-title">LEFT STICK (THR / YAW)</div>
+        <div class="gimbal-well" id="leftWell">
+          <div class="gimbal-crosshair-h"></div>
+          <div class="gimbal-crosshair-v"></div>
+          <div class="gimbal-knob" id="leftKnob"></div>
+        </div>
+        <div class="stick-readout" id="leftReadout">THR: 55% | YAW: 0%</div>
+        <div class="trim-row">
+          <button class="trim-btn" onclick="adjustTrim('yaw', -2)">◀ T4</button>
+          <button class="trim-btn" onclick="adjustTrim('yaw', 2)">T4 ▶</button>
+        </div>
+      </div>
+
+      <!-- Center Console: Flight Presets & Telemetry Sliders -->
+      <div class="center-console">
+        <div class="console-section-title">Quick Flight Attitude Presets</div>
+        <div class="preset-grid">
+          <button onclick="setPreset('level')">Level Cruise</button>
+          <button onclick="setPreset('climb30')">+30° Climb Rings</button>
+          <button onclick="setPreset('zenith')">+88° Zenith Cross</button>
+          <button onclick="setPreset('dive30')">-30° Dashed Dive</button>
+          <button onclick="setPreset('nadir')">-88° Nadir Cross</button>
+          <button onclick="setPreset('lowalt')">Low Alt Caution</button>
+        </div>
+
+        <div class="console-section-title">HUD &amp; Environment Parameters</div>
+        <div class="slider-grid">
+          <div class="slider-item">
+            <label>Pitch Zoom (px/°): <span id="lblScale">6.0</span></label>
+            <input type="range" id="rngScale" min="2.0" max="9.0" step="0.2" value="6.0" />
+          </div>
+          <div class="slider-item">
+            <label>Dial Backdrop (%): <span id="lblAlpha">65%</span></label>
+            <input type="range" id="rngAlpha" min="0" max="100" step="5" value="65" />
+          </div>
+          <div class="slider-item">
+            <label>Wind / Crab (°): <span id="lblCrab">+6°</span></label>
+            <input type="range" id="rngCrab" min="-25" max="25" step="1" value="6" />
+          </div>
+          <div class="slider-item">
+            <label>Home Bearing (°): <span id="lblHome">045°</span></label>
+            <input type="range" id="rngHome" min="0" max="359" step="1" value="45" />
+          </div>
+        </div>
+
+        <div class="status-strip">
+          <span>BATT: <b id="statBatt">16.2V</b></span>
+          <span>USED: <b id="statMah">420mAh</b></span>
+          <span>MODE: <b id="statMode">NAV CRUISE</b></span>
+          <span>RSSI: <b id="statRssi">92dB</b></span>
+        </div>
+      </div>
+
+      <!-- Right Gimbal: Pitch (Y, inverted spring-centered) + Roll (X, spring-centered) -->
+      <div class="gimbal-unit">
+        <div class="gimbal-title">RIGHT STICK (PITCH / ROLL)</div>
+        <div class="gimbal-well" id="rightWell">
+          <div class="gimbal-crosshair-h"></div>
+          <div class="gimbal-crosshair-v"></div>
+          <div class="gimbal-knob" id="rightKnob"></div>
+        </div>
+        <div class="stick-readout" id="rightReadout">PIT: +4° | ROL: 0°</div>
+        <div class="trim-row">
+          <button class="trim-btn" onclick="adjustTrim('pitch', -1)">▼ T2</button>
+          <button class="trim-btn" onclick="adjustTrim('pitch', 1)">▲ T2</button>
+          <button class="trim-btn" onclick="adjustTrim('roll', -1)">◀ T1</button>
+          <button class="trim-btn" onclick="adjustTrim('roll', 1)">T1 ▶</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById("hudCanvas");
+    const ctx = canvas.getContext("2d");
+
+    // Simulation state matching v1.0.0-rc1 Lua widget
+    const state = {
+      pitch: 4,
+      roll: 0,
+      yaw: 280,
+      throttle: 55,
+      yawRate: 0,
+      speed: 82,
+      alt: 135,
+      vspd: 0.4,
+      vfas: 16.2,
+      curr: 16.5,
+      fuel: 420,
+      rssi: 92,
+      homeDir: 45,
+      homeDist: 420,
+      mode: "NAV CRUISE",
+      pitchScale: 6.0,
+      backdropAlpha: 65,
+      crabOffset: 6,
+      autoDemo: false,
+      flightSec: 0,
+      trimPitch: 0,
+      trimRoll: 0,
+      trimYaw: 0
+    };
+
+    // Gimbal stick normalized coordinates (-1..+1)
+    let leftStick = { x: 0, y: -0.1 }; // y: -1 = 100% thr, +1 = 0% thr; x: 0 = center yaw
+    let rightStick = { x: 0, y: 0 };   // x: 0 = center roll; y: 0 = center pitch (+y pull down = pitch up)
+
+    function updateKnobVisuals() {
+      const lKnob = document.getElementById("leftKnob");
+      const rKnob = document.getElementById("rightKnob");
+      // Map -1..+1 to 18%..82% inside the well so knob stays neatly within bezel
+      lKnob.style.left = (50 + leftStick.x * 34) + "%";
+      lKnob.style.top  = (50 + leftStick.y * 34) + "%";
+
+      rKnob.style.left = (50 + rightStick.x * 34) + "%";
+      rKnob.style.top  = (50 + rightStick.y * 34) + "%";
+
+      document.getElementById("leftReadout").textContent =
+        `THR: ${Math.round(state.throttle)}% | YAW: ${Math.round(state.yawRate)}%`;
+      document.getElementById("rightReadout").textContent =
+        `PIT: ${state.pitch >= 0 ? "+" : ""}${Math.round(state.pitch)}° | ROL: ${state.roll >= 0 ? "+" : ""}${Math.round(state.roll)}°`;
+    }
+
+    function bindGimbal(wellId, isLeft) {
+      const well = document.getElementById(wellId);
+      let dragging = false;
+
+      function handleMove(clientX, clientY) {
+        const rect = well.getBoundingClientRect();
+        const cx = rect.left + rect.width / 2;
+        const cy = rect.top + rect.height / 2;
+        const maxR = rect.width * 0.36;
+        let dx = (clientX - cx) / maxR;
+        let dy = (clientY - cy) / maxR;
+        const dist = Math.hypot(dx, dy);
+        if (dist > 1) {
+          dx /= dist;
+          dy /= dist;
+        }
+        state.autoDemo = false;
+        document.getElementById("btnAutoDemo").classList.remove("active");
+
+        if (isLeft) {
+          leftStick.x = dx;
+          leftStick.y = dy;
+          state.throttle = Math.max(0, Math.min(100, ((1 - dy) / 2) * 100));
+          state.yawRate = dx * 100;
+        } else {
+          rightStick.x = dx;
+          rightStick.y = dy;
+          // Roll: right stick right = right bank (+roll)
+          state.roll = dx * 60 + state.trimRoll;
+          // Pitch: pulling stick DOWN (+dy) = nose UP (+pitch)
+          state.pitch = Math.max(-89, Math.min(89, dy * 88 + state.trimPitch));
+        }
+        updateKnobVisuals();
+      }
+
+      function handleRelease() {
+        if (!dragging) return;
+        dragging = false;
+        if (isLeft) {
+          // Left stick spring-centers Yaw (X) to 0, holds Throttle (Y)
+          leftStick.x = 0;
+          state.yawRate = 0;
+        } else {
+          // Right stick spring-centers both Pitch (Y) and Roll (X)
+          rightStick.x = 0;
+          rightStick.y = 0;
+          state.roll = state.trimRoll;
+          state.pitch = state.trimPitch;
+        }
+        updateKnobVisuals();
+      }
+
+      well.addEventListener("pointerdown", (e) => {
+        dragging = true;
+        well.setPointerCapture(e.pointerId);
+        handleMove(e.clientX, e.clientY);
+      });
+      well.addEventListener("pointermove", (e) => {
+        if (dragging) handleMove(e.clientX, e.clientY);
+      });
+      well.addEventListener("pointerup", handleRelease);
+      well.addEventListener("pointercancel", handleRelease);
+    }
+
+    bindGimbal("leftWell", true);
+    bindGimbal("rightWell", false);
+
+    function adjustTrim(axis, delta) {
+      if (axis === "pitch") { state.trimPitch += delta; state.pitch += delta; }
+      if (axis === "roll")  { state.trimRoll  += delta; state.roll  += delta; }
+      if (axis === "yaw")   { state.trimYaw   += delta; }
+      updateKnobVisuals();
+    }
+
+    function setPreset(name) {
+      state.autoDemo = false;
+      document.getElementById("btnAutoDemo").classList.remove("active");
+      if (name === "level") {
+        state.pitch = 2; state.roll = 0; state.alt = 135; state.speed = 82; state.throttle = 55;
+        rightStick = { x: 0, y: 2 / 88 };
+      } else if (name === "climb30") {
+        state.pitch = 30; state.roll = -15; state.alt = 165; state.speed = 68; state.throttle = 85;
+        rightStick = { x: -15 / 60, y: 30 / 88 };
+      } else if (name === "zenith") {
+        state.pitch = 88; state.roll = 0; state.alt = 210; state.speed = 54; state.throttle = 100;
+        rightStick = { x: 0, y: 1 };
+      } else if (name === "dive30") {
+        state.pitch = -30; state.roll = 20; state.alt = 95; state.speed = 112; state.throttle = 25;
+        rightStick = { x: 20 / 60, y: -30 / 88 };
+      } else if (name === "nadir") {
+        state.pitch = -88; state.roll = 0; state.alt = 65; state.speed = 128; state.throttle = 10;
+        rightStick = { x: 0, y: -1 };
+      } else if (name === "lowalt") {
+        state.pitch = -8; state.roll = 0; state.alt = 18; state.speed = 74; state.throttle = 45;
+        rightStick = { x: 0, y: -8 / 88 };
+      }
+      leftStick.y = 1 - (state.throttle / 100) * 2;
+      updateKnobVisuals();
+    }
+
+    document.getElementById("btnAutoDemo").addEventListener("click", (e) => {
+      state.autoDemo = !state.autoDemo;
+      e.target.classList.toggle("active", state.autoDemo);
+    });
+
+    document.getElementById("btnReset").addEventListener("click", () => {
+      state.trimPitch = 0; state.trimRoll = 0; state.trimYaw = 0;
+      leftStick = { x: 0, y: -0.1 };
+      rightStick = { x: 0, y: 0 };
+      state.throttle = 55; state.yawRate = 0;
+      state.pitch = 2; state.roll = 0; state.alt = 135; state.speed = 82;
+      state.autoDemo = false;
+      document.getElementById("btnAutoDemo").classList.remove("active");
+      updateKnobVisuals();
+    });
+
+    document.getElementById("rngScale").addEventListener("input", (e) => {
+      state.pitchScale = parseFloat(e.target.value);
+      document.getElementById("lblScale").textContent = state.pitchScale.toFixed(1);
+    });
+    document.getElementById("rngAlpha").addEventListener("input", (e) => {
+      state.backdropAlpha = parseInt(e.target.value, 10);
+      document.getElementById("lblAlpha").textContent = state.backdropAlpha + "%";
+    });
+    document.getElementById("rngCrab").addEventListener("input", (e) => {
+      state.crabOffset = parseInt(e.target.value, 10);
+      document.getElementById("lblCrab").textContent = (state.crabOffset >= 0 ? "+" : "") + state.crabOffset + "°";
+    });
+    document.getElementById("rngHome").addEventListener("input", (e) => {
+      state.homeDir = parseInt(e.target.value, 10);
+      document.getElementById("lblHome").textContent = String(state.homeDir).padStart(3, "0") + "°";
+    });
+
+    function wrap180(deg) {
+      while (deg > 180) deg -= 360;
+      while (deg < -180) deg += 360;
+      return deg;
+    }
+
+    function rotatePt(x, y, cx, cy, cosR, sinR) {
+      const dx = x - cx, dy = y - cy;
+      return [cx + dx * cosR - dy * sinR, cy + dx * sinR + dy * cosR];
+    }
+
+    let lastTime = performance.now();
+    function step(now) {
+      const dt = Math.min(0.1, (now - lastTime) / 1000);
+      lastTime = now;
+      state.flightSec += dt;
+
+      if (state.autoDemo) {
+        const t = state.flightSec;
+        state.pitch = Math.sin(t * 0.45) * 85;
+        state.roll = Math.sin(t * 0.3) * 35;
+        state.yaw = (280 + Math.sin(t * 0.2) * 50 + 360) % 360;
+        rightStick.y = state.pitch / 88;
+        rightStick.x = state.roll / 60;
+        updateKnobVisuals();
+      } else {
+        // Yaw integration from left stick X + trim
+        const effectiveYawRate = (state.yawRate * 0.65) + state.trimYaw;
+        state.yaw = (state.yaw + effectiveYawRate * dt + 360) % 360;
+      }
+
+      // Smart flight physics & battery drain
+      const targetSpeed = 35 + (state.throttle / 100) * 85 - state.pitch * 0.45;
+      state.speed += (Math.max(25, targetSpeed) - state.speed) * dt * 2.0;
+      const pitchRad = state.pitch * Math.PI / 180;
+      state.vspd = (state.speed / 3.6) * Math.sin(pitchRad);
+      state.alt = Math.max(5, state.alt + state.vspd * dt);
+
+      state.curr = 4.2 + Math.pow(state.throttle / 100, 1.8) * 32.0;
+      state.fuel += (state.curr * 1000 / 3600) * dt;
+      state.vfas = Math.max(13.2, 16.8 - (state.fuel / 2200) * 2.6 - state.curr * 0.015);
+
+      // Update UI telemetry readouts
+      const mins = String(Math.floor(state.flightSec / 60)).padStart(2, "0");
+      const secs = String(Math.floor(state.flightSec % 60)).padStart(2, "0");
+      document.getElementById("ethosTimer").textContent = `FLT ${mins}:${secs}`;
+      document.getElementById("statBatt").textContent = state.vfas.toFixed(1) + "V";
+      document.getElementById("statMah").textContent = Math.round(state.fuel) + "mAh";
+      document.getElementById("statMode").textContent = state.mode;
+      document.getElementById("statRssi").textContent = state.rssi + "dB";
+
+      renderHUD(now);
+      requestAnimationFrame(step);
+    }
+
+    function renderHUD(now) {
+      const W = 480, H = 272;
+      const cx = W / 2, cy = H / 2 + 4;
+      const hudColor = "#00ff66";
+      const warnColor = "#ff4136";
+      const bgAlpha = state.backdropAlpha / 100;
+
+      ctx.fillStyle = "#060a08";
+      ctx.fillRect(0, 0, W, H);
+
+      const rollRad = -state.roll * Math.PI / 180;
+      const cosR = Math.cos(rollRad), sinR = Math.sin(rollRad);
+      const pxPerDeg = state.pitchScale;
+
+      // 1. Clipped Central Gripen Pitch Ladder
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, 38, W, H - 64);
+      ctx.clip();
+
+      ctx.strokeStyle = hudColor;
+      ctx.fillStyle = hudColor;
+      ctx.lineWidth = 1.2;
+
+      for (let deg = -80; deg <= 80; deg += 10) {
+        if (Math.abs(deg - state.pitch) <= 45) {
+          if (deg === 0) {
+            const horizY = cy + state.pitch * pxPerDeg;
+            if (Math.abs(horizY - cy) <= 290) {
+              const gap = 22, span = 260;
+              const [x1, y1] = rotatePt(cx - span, horizY, cx, cy, cosR, sinR);
+              const [x2, y2] = rotatePt(cx - gap,  horizY, cx, cy, cosR, sinR);
+              const [x3, y3] = rotatePt(cx + gap,  horizY, cx, cy, cosR, sinR);
+              const [x4, y4] = rotatePt(cx + span, horizY, cx, cy, cosR, sinR);
+              ctx.beginPath();
+              ctx.moveTo(x1, y1); ctx.lineTo(x2, y2);
+              ctx.moveTo(x3, y3); ctx.lineTo(x4, y4);
+              ctx.stroke();
+            }
+          } else if (deg > 0) {
+            const zenithLocalY = cy - (90 - state.pitch) * pxPerDeg;
+            const radius = (90 - deg) * pxPerDeg;
+            if (radius >= 4) {
+              const [zx, zy] = rotatePt(cx, zenithLocalY, cx, cy, cosR, sinR);
+              ctx.beginPath();
+              ctx.arc(zx, zy, radius, 0, 2 * Math.PI);
+              ctx.stroke();
+            }
+          } else {
+            const nadirLocalY = cy + (90 + state.pitch) * pxPerDeg;
+            const radius = (90 + deg) * pxPerDeg;
+            if (radius >= 4) {
+              const [nx, ny] = rotatePt(cx, nadirLocalY, cx, cy, cosR, sinR);
+              const dashCount = 16;
+              const stepAng = (2 * Math.PI) / dashCount;
+              const dashAng = stepAng * 0.55;
+              ctx.beginPath();
+              for (let i = 0; i < dashCount; i++) {
+                const a1 = i * stepAng;
+                const a2 = a1 + dashAng;
+                ctx.moveTo(nx + Math.sin(a1) * radius, ny - Math.cos(a1) * radius);
+                ctx.lineTo(nx + Math.sin(a2) * radius, ny - Math.cos(a2) * radius);
+              }
+              ctx.stroke();
+
+              // Exactly 4 cardinal triangles at 0, 90, 180, 270 deg
+              for (let k = 0; k < 4; k++) {
+                const ca = k * (Math.PI / 2);
+                const bx = nx + Math.sin(ca) * radius;
+                const by = ny - Math.cos(ca) * radius;
+                const outX = Math.sin(ca), outY = -Math.cos(ca);
+                const tanX = -outY, tanY = outX;
+                ctx.beginPath();
+                ctx.moveTo(bx + outX * 5, by + outY * 5);
+                ctx.lineTo(bx - tanX * 3, by - tanY * 3);
+                ctx.lineTo(bx + tanX * 3, by + tanY * 3);
+                ctx.closePath();
+                ctx.fill();
+              }
+            }
+          }
+        }
+      }
+
+      // Full N/S/E/W Cardinal Crosses at Zenith (+90) and Nadir (-90)
+      function drawCardinalCross(px, py, invertSign) {
+        ctx.beginPath();
+        ctx.arc(px, py, 6, 0, 2 * Math.PI);
+        ctx.stroke();
+        const cardinals = [[0, "N"], [90, "E"], [180, "S"], [270, "W"]];
+        ctx.font = "9px monospace";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        for (const [cDeg, lbl] of cardinals) {
+          const ang = ((cDeg - state.yaw) * Math.PI / 180) * invertSign - rollRad;
+          ctx.beginPath();
+          ctx.moveTo(px + Math.sin(ang) * 6, py - Math.cos(ang) * 6);
+          ctx.lineTo(px + Math.sin(ang) * 18, py - Math.cos(ang) * 18);
+          ctx.stroke();
+          ctx.fillText(lbl, px + Math.sin(ang) * 25, py - Math.cos(ang) * 25);
+        }
+      }
+
+      const zenithDist = -(90 - state.pitch) * pxPerDeg;
+      if (Math.abs(zenithDist) <= 240) {
+        const [zx, zy] = rotatePt(cx, cy + zenithDist, cx, cy, cosR, sinR);
+        drawCardinalCross(zx, zy, 1);
+      }
+      const nadirDist = (90 + state.pitch) * pxPerDeg;
+      if (Math.abs(nadirDist) <= 240) {
+        const [nx, ny] = rotatePt(cx, cy + nadirDist, cx, cy, cosR, sinR);
+        drawCardinalCross(nx, ny, -1);
+      }
+
+      // PC-21 Fixed Boresight Ghost (-w-)
+      ctx.beginPath();
+      ctx.moveTo(cx - 14, cy); ctx.lineTo(cx - 6, cy);
+      ctx.lineTo(cx - 3, cy + 4); ctx.lineTo(cx, cy);
+      ctx.lineTo(cx + 3, cy + 4); ctx.lineTo(cx + 6, cy);
+      ctx.lineTo(cx + 14, cy);
+      ctx.stroke();
+
+      // Dynamic Flight Path Vector (-o-)
+      const fpaDeg = (state.speed > 10) ? Math.atan2(state.vspd, state.speed / 3.6) * 180 / Math.PI : 0;
+      let [fpvX, fpvY] = rotatePt(cx + state.crabOffset * pxPerDeg, cy + (state.pitch - fpaDeg) * pxPerDeg, cx, cy, cosR, sinR);
+      fpvX = Math.max(96, Math.min(W - 96, fpvX));
+      fpvY = Math.max(54, Math.min(H - 38, fpvY));
+
+      if (bgAlpha > 0) {
+        ctx.fillStyle = `rgba(6, 10, 8, ${bgAlpha})`;
+        ctx.beginPath();
+        ctx.arc(fpvX, fpvY, 15, 0, 2 * Math.PI);
+        ctx.fill();
+      }
+      ctx.strokeStyle = hudColor;
+      ctx.beginPath();
+      ctx.arc(fpvX, fpvY, 5, 0, 2 * Math.PI);
+      ctx.moveTo(fpvX - 13, fpvY); ctx.lineTo(fpvX - 5, fpvY);
+      ctx.moveTo(fpvX + 5, fpvY);  ctx.lineTo(fpvX + 13, fpvY);
+      ctx.moveTo(fpvX, fpvY - 10); ctx.lineTo(fpvX, fpvY - 5);
+      ctx.stroke();
+
+      // Bottom Bank Scale
+      const bankR = 104;
+      const ticks = [-60, -45, -30, -20, -10, 0, 10, 20, 30, 45, 60];
+      for (const deg of ticks) {
+        const a = deg * Math.PI / 180;
+        const len = (deg % 30 === 0) ? 7 : 4;
+        ctx.beginPath();
+        ctx.moveTo(cx + Math.sin(a) * bankR, cy + Math.cos(a) * bankR);
+        ctx.lineTo(cx + Math.sin(a) * (bankR + len), cy + Math.cos(a) * (bankR + len));
+        ctx.stroke();
+      }
+      const clampedRoll = Math.max(-60, Math.min(60, state.roll));
+      const pa = -clampedRoll * Math.PI / 180;
+      ctx.fillStyle = hudColor;
+      ctx.beginPath();
+      ctx.moveTo(cx + Math.sin(pa) * (bankR - 2), cy + Math.cos(pa) * (bankR - 2));
+      ctx.lineTo(cx + Math.sin(pa - 0.05) * (bankR - 9), cy + Math.cos(pa - 0.05) * (bankR - 9));
+      ctx.lineTo(cx + Math.sin(pa + 0.05) * (bankR - 9), cy + Math.cos(pa + 0.05) * (bankR - 9));
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.restore();
+
+      // 2. Left Speed & Right Altitude 10-Dot Circular Dials
+      function drawDial(dcx, dcy, radius, value, mainTxt, subTxt) {
+        if (bgAlpha > 0) {
+          ctx.fillStyle = `rgba(6, 10, 8, ${bgAlpha})`;
+          ctx.beginPath();
+          ctx.arc(dcx, dcy, radius + 8, 0, 2 * Math.PI);
+          ctx.fill();
+        }
+        ctx.fillStyle = hudColor;
+        ctx.strokeStyle = hudColor;
+        for (let i = 0; i < 10; i++) {
+          const a = (i / 10) * 2 * Math.PI;
+          ctx.beginPath();
+          ctx.arc(dcx + Math.sin(a) * radius, dcy - Math.cos(a) * radius, 2, 0, 2 * Math.PI);
+          ctx.fill();
+        }
+        const revFrac = (((value % 100) + 100) % 100) / 100;
+        const ptrAng = revFrac * 2 * Math.PI;
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.moveTo(dcx + Math.sin(ptrAng) * (radius - 8), dcy - Math.cos(ptrAng) * (radius - 8));
+        ctx.lineTo(dcx + Math.sin(ptrAng) * (radius + 3), dcy - Math.cos(ptrAng) * (radius + 3));
+        ctx.stroke();
+
+        ctx.font = "bold 14px monospace";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(mainTxt, dcx, dcy);
+        ctx.font = "9px monospace";
+        ctx.fillText(subTxt, dcx, dcy + radius + 11);
+      }
+
+      drawDial(44, cy, 30, state.speed, String(Math.round(state.speed)), "KM/H");
+      drawDial(W - 44, cy, 30, state.alt, String(Math.round(state.alt)), (state.vspd >= 0 ? "+" : "") + state.vspd.toFixed(1) + "m/s");
+
+      // 3. Top Sliding Compass Tape
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(cx - 100, 2, 200, 28);
+      ctx.clip();
+      const centerDeg = Math.floor(state.yaw);
+      ctx.font = "9px monospace";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "top";
+      for (let d = centerDeg - 50; d <= centerDeg + 50; d++) {
+        if (d % 5 === 0) {
+          const x = cx + (d - state.yaw) * 2.2;
+          if (d % 15 === 0) {
+            ctx.beginPath(); ctx.moveTo(x, 15); ctx.lineTo(x, 20); ctx.stroke();
+            const norm = ((d % 360) + 360) % 360;
+            let lbl = String(Math.floor(norm / 10)).padStart(2, "0");
+            if (norm === 0) lbl = "N";
+            else if (norm === 90) lbl = "E";
+            else if (norm === 180) lbl = "S";
+            else if (norm === 270) lbl = "W";
+            ctx.fillText(lbl, x, 2);
+          } else {
+            ctx.beginPath(); ctx.moveTo(x, 17); ctx.lineTo(x, 20); ctx.stroke();
+          }
+        }
+      }
+      const relHome = wrap180(state.homeDir - state.yaw);
+      const homeX = cx + Math.max(-94, Math.min(94, relHome * 2.2));
+      ctx.beginPath();
+      ctx.moveTo(homeX, 21); ctx.lineTo(homeX - 4, 26); ctx.lineTo(homeX + 4, 26);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+
+      ctx.font = "11px monospace";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "top";
+      ctx.fillText(String(Math.floor(((state.yaw % 360) + 360) % 360)).padStart(3, "0"), cx, 25);
+
+      const arrowY = 43;
+      if (Math.abs(relHome) > 12) {
+        if (relHome < 0) {
+          ctx.beginPath(); ctx.moveTo(cx - 20, arrowY); ctx.lineTo(cx + 8, arrowY); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(cx - 24, arrowY); ctx.lineTo(cx - 17, arrowY - 4); ctx.lineTo(cx - 17, arrowY + 4); ctx.closePath(); ctx.fill();
+        } else {
+          ctx.beginPath(); ctx.moveTo(cx - 8, arrowY); ctx.lineTo(cx + 20, arrowY); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(cx + 24, arrowY); ctx.lineTo(cx + 17, arrowY - 4); ctx.lineTo(cx + 17, arrowY + 4); ctx.closePath(); ctx.fill();
+        }
+      }
+      ctx.font = "9px monospace";
+      ctx.textAlign = "left";
+      ctx.fillText("H:" + Math.round(state.homeDist) + "m", cx + 30, arrowY - 4);
+
+      // 4. Caution Alerts
+      const blink = Math.floor(now / 330) % 2 === 0;
+      let alertMsg = null;
+      if (state.vfas < 14.0) alertMsg = "LOW BATT";
+      else if (state.speed < 35) alertMsg = "STALL SPEED";
+      else if (state.alt < 25) alertMsg = "PULL UP / LOW ALT";
+
+      if (alertMsg && blink) {
+        ctx.strokeStyle = warnColor;
+        ctx.fillStyle = warnColor;
+        ctx.strokeRect(cx - 56, H - 46, 112, 17);
+        ctx.font = "11px monospace";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(alertMsg, cx, H - 37);
+        ctx.strokeStyle = hudColor;
+        ctx.fillStyle = hudColor;
+      }
+
+      // 5. Bottom INAV Telemetry Bar
+      ctx.beginPath();
+      ctx.moveTo(8, H - 24); ctx.lineTo(W - 8, H - 24);
+      ctx.stroke();
+      ctx.font = "11px monospace";
+      ctx.textBaseline = "top";
+      ctx.textAlign = "left";
+      ctx.fillText(`${state.vfas.toFixed(1)}V ${state.curr.toFixed(1)}A ${Math.round(state.fuel)}mAh`, 10, H - 20);
+      ctx.textAlign = "center";
+      ctx.fillText(state.mode, cx + 15, H - 20);
+      ctx.textAlign = "right";
+      ctx.fillText(`RSSI ${state.rssi}`, W - 10, H - 20);
+    }
+
+    updateKnobVisuals();
+    requestAnimationFrame(step);
+  </script>
+</body>
+</html>

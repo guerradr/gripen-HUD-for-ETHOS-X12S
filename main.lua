@@ -157,7 +157,7 @@ local function drawVerticalCardinalCross(px, py, yawDeg, rollRad, invertSign)
   end
 end
 
-local function drawPoleMarkers(cx, cy, pitchDeg, yawDeg, pxPerDeg, rollRad)
+local function drawPoleMarkers(cx, cy, pitchDeg, yawDeg, pxPerDeg, rollRad, cosR, sinR)
   local zenithDist = -(90 - pitchDeg) * pxPerDeg
   if math.abs(zenithDist) <= 240 then
     local zx, zy = rotatePt(cx, cy + zenithDist, cx, cy, cosR, sinR)
@@ -280,7 +280,7 @@ local function paint(widget)
       drawGripenPitchLine(cx, cy, t.pitch, deg, cfg.pitchScale, cosR, sinR)
     end
   end
-  drawPoleMarkers(cx, cy, t.pitch, t.yaw, cfg.pitchScale, rollRad)
+  drawPoleMarkers(cx, cy, t.pitch, t.yaw, cfg.pitchScale, rollRad, cosR, sinR)
 
   if cfg.showGhost then
     lcd.drawLine(cx - 14, cy, cx - 6, cy)
